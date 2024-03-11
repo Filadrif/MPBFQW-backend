@@ -12,7 +12,7 @@ from schemas.enums import EnumTaskType
 
 class Course(Base):
     __tablename__ = "course"
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(nullable=False, unique=True)
     is_published: Mapped[bool] = mapped_column(nullable=False, default=False)
     owner: Mapped[int] = mapped_column(ForeignKey("account.id"), index=True, nullable=False)
@@ -32,7 +32,7 @@ class CourseInfo(Base):
 
 class CourseMessage(Base):
     __tablename__ = "course_message"
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     course_id: Mapped[int] = mapped_column(ForeignKey("course.id"), nullable=False)
     account_id: Mapped[int] = mapped_column(ForeignKey("account.id"), index=True, nullable=False)
     content: Mapped[Dict[Any, Any]] = mapped_column(JSONB, nullable=False)
@@ -45,7 +45,7 @@ class CourseMessage(Base):
 
 class CourseSection(Base):
     __tablename__ = "course_section"
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     course_id: Mapped[int] = mapped_column(ForeignKey("course.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     duration: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -54,18 +54,27 @@ class CourseSection(Base):
 
 class CourseLesson(Base):
     __tablename__ = "course_lesson"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(32), nullable=False)
+    section_id: Mapped[int] = mapped_column(ForeignKey("course_section.id"), nullable=False, index=True)
+    is_opened: Mapped[bool] = mapped_column(nullable=False, default=True)
 
 
 class CourseTask(Base):
     __tablename__ = "course_task"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("course_lesson.id"), nullable=False, index=True)
+    task_type: Mapped[EnumTaskType] = mapped_column(apply_task_type, nullable=False, index=True)
+    content: Mapped[Dict[Any, Any]] = mapped_column(JSONB, nullable=True)
+    s3_path: Mapped[str] = mapped_column(nullable=True)
 
 
 class CourseProgress(Base):
     __tablename__ = "course_progress"
     account_id: Mapped[int] = mapped_column(ForeignKey("account.id"), primary_key=True, index=True, nullable=False)
-    task_id: Mapped[int]
+    task_id: Mapped[int] = mapped_column(ForeignKey("account_task.id"), index=True, nullable=False)
     finished: Mapped[bool] = mapped_column(nullable=False, default=False)
-    points: Mapped[int]
+    points: Mapped[int] = mapped_column(nullable=True, default=0)
     finished_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,
                                                   server_default=func.current_timestamp(),
                                                   deferred=True, deferred_group="date")
@@ -85,4 +94,14 @@ class CourseStatistics(Base):
     finished_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,
                                                   deferred=True, deferred_group="date")
 
+
+class CourseFiles(Base):
+    __tablename__ = "course_files"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("course.id"), nullable=True, index=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("course_task.id"), nullable=True, index=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey("course_message.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(32), nullable=False, default="файл", index=True)
+    s3_path: Mapped[str] = mapped_column(nullable=False)
+    owner: Mapped[int] = mapped_column(ForeignKey("account.id"), nullable=False, index=True)
 
