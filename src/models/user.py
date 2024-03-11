@@ -49,7 +49,7 @@ class AccountSession(Base):
     invalid_after: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     identity: Mapped[str] = mapped_column(nullable=False)
 
-    user: Mapped["Account"] = relationship(back_populates="sessions", uselist=False, passive_deletes=True)
+    account: Mapped["Account"] = relationship(back_populates="sessions", uselist=False, passive_deletes=True)
 
 
 class AccountInfo(Base):
@@ -60,7 +60,7 @@ class AccountInfo(Base):
     surname: Mapped[str] = mapped_column(String(32), nullable=False)
     patronymic: Mapped[str] = mapped_column(String(32), nullable=True)
     gender: Mapped[EnumGenderType] = mapped_column(apply_gender_type, nullable=True, index=True)
-    phone: Mapped[str] = mapped_column(String(16), nullable=False, unique=True)
+    phone: Mapped[str] = mapped_column(String(16), nullable=True, unique=True)
     date_joined: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,
                                                   deferred=True, deferred_group="date")
     date_of_birth: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,

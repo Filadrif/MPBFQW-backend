@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     AWS_HOST: str
     AWS_BUCKET: str
 
+    ADMIN_USERNAME: str
+    ADMIN_EMAIL: str
+    ADMIN_PASSWORD: str
+
     class Config:
         env_file = "../.env"
 
