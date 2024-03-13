@@ -1,6 +1,8 @@
+import sqlalchemy.exc
 from fastapi import APIRouter, Depends, Request, Response, Body, Cookie
 from sqlalchemy import or_
 from datetime import datetime, timezone
+import logging
 import errors
 from models.user import Account, AccountInfo
 from db import get_database, Session
@@ -64,21 +66,22 @@ async def signup_user(credentials: SignUp, db: Session = Depends(get_database)):
     if db.query(Account).filter(or_(Account.username == credentials.username,Account.email == credentials.email)).first():
         raise errors.user_create_error("User with such username or email already exits!")
 
-    new_user = Account(
-            username=credentials.username,
-            password=credentials.password,
-            account_type=EnumAccountType.student if credentials.student else EnumAccountType.teacher,
-            is_active=True
-        )
+    new_user = Account(username=credentials.username,
+                       email=credentials.email,
+                       password=credentials.password,
+                       account_type=EnumAccountType.student if credentials.student else EnumAccountType.teacher,
+                       is_active=True)
     db.add(new_user)
-
-    new_user_info = AccountInfo(name=credentials.name,
-                                surname=credentials.surname,
-                                patronymic=credentials.patronymic,
-                                gender=credentials.gender,
-                                phone=credentials.phone,
-                                date_joined=datetime.now(tz=timezone.utc),
-                                date_of_birth=credentials.date_of_birth)
-    db.add(new_user_info)
-
-    db.commit()
+    db.flush()
+    try:
+        new_user_info = AccountInfo(account_id=new_user.id,
+                                    name=credentials.name,
+                                    surname=credentials.surname,
+                                    patronymic=credentials.patronymic,
+                                    gender=credentials.gender,
+                                    phone=credentials.phone,
+                                    date_joined=datetime.now(tz=timezone.utc),
+                                    date_of_birth=credentials.date_of_birth)
+        db.add(new_user_info)
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.rollback()

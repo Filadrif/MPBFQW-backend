@@ -72,7 +72,7 @@ class CourseTask(Base):
 class CourseProgress(Base):
     __tablename__ = "course_progress"
     account_id: Mapped[int] = mapped_column(ForeignKey("account.id"), primary_key=True, index=True, nullable=False)
-    task_id: Mapped[int] = mapped_column(ForeignKey("account_task.id"), index=True, nullable=False)
+    task_id: Mapped[int] = mapped_column(ForeignKey("course_task.id"), index=True, nullable=False)
     finished: Mapped[bool] = mapped_column(nullable=False, default=False)
     points: Mapped[int] = mapped_column(nullable=True, default=0)
     finished_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,
