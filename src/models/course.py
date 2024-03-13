@@ -21,7 +21,7 @@ class Course(Base):
 class CourseInfo(Base):
     __tablename__ = "course_info"
     course_id: Mapped[int] = mapped_column(ForeignKey("course.id"), primary_key=True, nullable=False)
-    description: Mapped[str] = mapped_column(String(256), nullable=True)
+    description: Mapped[str] = mapped_column(String(512), nullable=True)
     course_tags: Mapped[List[str]] = mapped_column(ARRAY(String, dimensions=1), default=[])
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,
                                                  server_default=func.current_timestamp(),

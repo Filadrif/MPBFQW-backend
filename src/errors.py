@@ -54,3 +54,9 @@ def not_implemented():
 def file_not_found():
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                          detail="File not found!")
+
+
+def course_name_is_not_unique():
+    return HTTPException(status_code=status.HTTP_409_CONFLICT,
+                         detail="Course with such name already exists!")
+

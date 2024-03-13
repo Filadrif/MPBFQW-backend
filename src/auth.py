@@ -144,12 +144,10 @@ def refresh_user_tokens(access: str, refresh: str, request: Request, response: R
 
 async def get_user_session(request: Request, access: str = Cookie(None),
                            db: Session = Depends(get_database)) -> AccountSession:
-    """Получение сессии пользователя"""
     return verify_user_access(access, request, db)
 
 
 async def get_user(session: AccountSession = Depends(get_user_session)) -> Account:
-    """Получение аккаунта пользователя"""
     if session.account.is_active:
         return session.account
     else:

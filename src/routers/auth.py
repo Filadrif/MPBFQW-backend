@@ -1,7 +1,7 @@
 import sqlalchemy.exc
 from fastapi import APIRouter, Depends, Request, Response, Body, Cookie
 from sqlalchemy import or_
-from datetime import datetime, timezone
+from datetime import datetime
 import logging
 import errors
 from models.user import Account, AccountInfo
@@ -63,7 +63,8 @@ async def signup_user(credentials: SignUp, db: Session = Depends(get_database)):
     if len(credentials.password) < 8:
         raise errors.user_create_error("Password is too short (must be >8 symbols)!")
 
-    if db.query(Account).filter(or_(Account.username == credentials.username,Account.email == credentials.email)).first():
+    if db.query(Account).filter(or_(Account.username == credentials.username,
+                                    Account.email == credentials.email)).first():
         raise errors.user_create_error("User with such username or email already exits!")
 
     new_user = Account(username=credentials.username,
@@ -80,7 +81,7 @@ async def signup_user(credentials: SignUp, db: Session = Depends(get_database)):
                                     patronymic=credentials.patronymic,
                                     gender=credentials.gender,
                                     phone=credentials.phone,
-                                    date_joined=datetime.now(tz=timezone.utc),
+                                    date_joined=datetime.now(),
                                     date_of_birth=credentials.date_of_birth)
         db.add(new_user_info)
     except sqlalchemy.exc.SQLAlchemyError:
