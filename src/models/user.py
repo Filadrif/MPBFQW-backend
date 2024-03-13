@@ -24,7 +24,8 @@ class Account(Base):
     password_changed_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,
                                                           server_default=func.current_timestamp(),
                                                           deferred=True, deferred_group="date")
-
+    account_info: Mapped["AccountInfo"] = relationship(back_populates="account", uselist=True,
+                                                       passive_deletes=True)
     sessions: Mapped[List["AccountSession"]] = relationship(back_populates="account", uselist=True,
                                                             passive_deletes=True)
 
@@ -65,3 +66,5 @@ class AccountInfo(Base):
                                                   deferred=True, deferred_group="date")
     date_of_birth: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,
                                                     deferred=True, deferred_group="date")
+
+    account: Mapped["Account"] = relationship(back_populates="account_info", uselist=False, passive_deletes=True)

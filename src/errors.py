@@ -60,3 +60,19 @@ def course_name_is_not_unique():
     return HTTPException(status_code=status.HTTP_409_CONFLICT,
                          detail="Course with such name already exists!")
 
+
+def course_not_found():
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                         detail="Course not found")
+
+
+def course_section_not_found():
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                         detail="Course section not found")
+
+
+def course_registration_already_exists():
+    return HTTPException(status_code=status.HTTP_409_CONFLICT,
+                         detail="User already registered on this course!")
+
+
