@@ -16,12 +16,14 @@ import errors
 router = APIRouter()
 
 
-@router.post("/{course_id}/register}", status_code=204)
+@router.post("/{course_id}/register", status_code=204,
+             responses=errors.with_errors(errors.course_not_found(),
+                                          errors.course_registration_already_exists()))
 async def course_registration(course_id: int,
                               user: Account = Depends(get_user),
                               db: Session = Depends(get_database)):
     """Uses for student's registration on course"""
-    if db.query(Course).options(load_only(Course.id)).filter_by(id=course_id).first() is None:
+    if db.query(Course).options(load_only(Course.id)).filter_by(id=course_id, is_published=True).first() is None:
         raise errors.course_not_found()
     existing_registration = db.query(CourseStatistics).filter_by(account_id=user.id, course_id=course_id).first()
     if existing_registration is not None:
@@ -34,8 +36,11 @@ async def course_registration(course_id: int,
     db.commit()
 
 
-@router.get("/courses/all")
-async def get_all_my_courses(user: Account = Depends(get_user),
+@router.get("/courses/all", response_model=List[GetAllCourses],
+            responses=errors.with_errors())
+async def get_all_my_courses(limit: int,
+                             page: int,
+                             user: Account = Depends(get_user),
                              db: Session = Depends(get_database)):
     courses = db.query(CourseStatistics).filter_by(account_id=user.id)
 
@@ -55,9 +60,13 @@ async def get_my_recent_courses(user: Account = Depends(get_user),
 
     recent_courses = []
     for course in courses:
+        if course.patronymic is None:
+            owner_name = course.surname + course.name
+        else:
+            owner_name = course.surname + course.name + course.patronymic
         recent_courses.append(GetCourseRecent(id=course.id,
                                               name=course.name,
-                                              owner_name=course.surname + course.name))
+                                              owner_name=owner_name))
 
     return recent_courses
 

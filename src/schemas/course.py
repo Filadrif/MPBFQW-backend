@@ -48,4 +48,8 @@ class CourseUpdate(BaseModel):
 
 
 class CourseCreatedData(BaseModel):
-    id: int
+    course_id: int
+
+
+class CourseSectionCreatedData(BaseModel):
+    section_id: int

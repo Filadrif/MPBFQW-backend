@@ -76,3 +76,22 @@ def course_registration_already_exists():
                          detail="User already registered on this course!")
 
 
+def database_transaction_error():
+    return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                         detail="Server can't send your data to database!")
+
+
+def section_not_found():
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                         detail="Section not found")
+
+
+def lesson_not_found():
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                         detail="Lesson not found")
+
+
+def task_not_found():
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                         detail="Task not found")
+

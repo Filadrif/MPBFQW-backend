@@ -29,6 +29,8 @@ class CourseInfo(Base):
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,
                                                  deferred=True, deferred_group="date")
 
+    course: Mapped["Course"] = relationship("Course", backref="course_info", uselist=False)
+
 
 class CourseMessage(Base):
     __tablename__ = "course_message"
@@ -51,6 +53,8 @@ class CourseSection(Base):
     duration: Mapped[int] = mapped_column(Integer, nullable=False)
     is_opened: Mapped[bool] = mapped_column(nullable=False, default=True)
 
+    course: Mapped["Course"] = relationship("Course", backref="section")
+
 
 class CourseLesson(Base):
     __tablename__ = "course_lesson"
@@ -58,6 +62,8 @@ class CourseLesson(Base):
     name: Mapped[str] = mapped_column(String(32), nullable=False)
     section_id: Mapped[int] = mapped_column(ForeignKey("course_section.id"), nullable=False, index=True)
     is_opened: Mapped[bool] = mapped_column(nullable=False, default=True)
+
+    section: Mapped["CourseSection"] = relationship("CourseSection", backref="lesson")
 
 
 class CourseTask(Base):
@@ -67,6 +73,8 @@ class CourseTask(Base):
     task_type: Mapped[EnumTaskType] = mapped_column(apply_task_type, nullable=False, index=True)
     content: Mapped[Dict[Any, Any]] = mapped_column(JSONB, nullable=True)
     s3_path: Mapped[str] = mapped_column(nullable=True)
+
+    lesson: Mapped["CourseLesson"] = relationship("CourseLesson", backref="task")
 
 
 class CourseProgress(Base):
@@ -93,6 +101,8 @@ class CourseStatistics(Base):
     finished: Mapped[bool] = mapped_column(nullable=False, default=False)
     finished_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,
                                                   deferred=True, deferred_group="date")
+
+    course: Mapped["Course"] = relationship("Course", backref="course_statistics")
 
 
 class CourseFiles(Base):

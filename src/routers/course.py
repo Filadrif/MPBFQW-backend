@@ -3,6 +3,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import load_only
 from sqlalchemy.sql import func
+import traceback
+import logging
 
 from db import get_database, Session
 from auth import get_user, get_teacher, get_admin
@@ -10,7 +12,7 @@ from models.user import Account
 from models.course import Course, CourseInfo, CourseSection
 from schemas.enums import EnumAccountType
 from schemas.course import (CourseCreate, CourseUpdate, CourseCreatedData, GetAllCourses, CourseSectionCreate,
-                            CourseSectionUpdate)
+                            CourseSectionUpdate, CourseSectionCreatedData)
 
 import errors
 
@@ -18,7 +20,13 @@ import errors
 router = APIRouter()
 
 
-@router.post("/", response_model=CourseCreatedData)
+def check_course_existence(course_id: int, db: Session = Depends(get_database)):
+    course = db.query(Course).filter_by(id=course_id).first()
+
+
+@router.post("/", response_model=CourseCreatedData,
+             responses=errors.with_errors(errors.course_name_is_not_unique(),
+                                          errors.database_transaction_error()))
 async def create_course(params: CourseCreate,
                         user: Account = Depends(get_teacher),
                         db: Session = Depends(get_database)):
@@ -36,12 +44,16 @@ async def create_course(params: CourseCreate,
         db.add(new_course_info)
         db.commit()
     except sqlalchemy.exc.SQLAlchemyError:
+        logging.error(f"An error occurred while creating new course: {traceback.format_exc()}")
         db.rollback()
+        raise errors.database_transaction_error()
 
-    return CourseCreatedData(id=new_course.id)
+    return CourseCreatedData(course_id=new_course.id)
 
 
-@router.post("/section/{course_id}")
+@router.post("/{course_id}/section", response_model=CourseSectionCreatedData,
+             responses=errors.with_errors(errors.course_not_found(),
+                                          errors.access_denied()))
 async def create_course_section(course_id: int,
                                 params: CourseSectionCreate,
                                 user: Account = Depends(get_teacher),
@@ -58,8 +70,10 @@ async def create_course_section(course_id: int,
         name=params.name,
         duration=params.duration
     )
-    db.add(course)
+    db.add(section)
     db.commit()
+
+    return CourseSectionCreatedData(section_id=section.id)
 
 
 @router.post("/lesson")
@@ -74,8 +88,8 @@ async def create_course_task():
     pass
 
 
-@router.post("/message")
-async def create_course_message():
+@router.post("/{course_id}/message")
+async def create_course_message(course_id: int):
     pass
 
 
@@ -84,22 +98,24 @@ async def get_course(course_id: int):
     pass
 
 
-@router.get("/{course_id}")
-async def get_course_section():
+@router.get("/{course_id}/section/{section_id}")
+async def get_course_section(course_id: int, section_id: int):
     pass
 
 
-@router.get("/{course_id}")
-async def get_course_lesson():
+@router.get("/{course_id}/lesson/{lesson_id}")
+async def get_course_lesson(course_id: int, lesson_id: int):
     pass
 
 
-@router.get("/{course_id}")
-async def get_course_task():
+@router.get("/{course_id}/task/task/{task_id}")
+async def get_course_task(course_id: int, task_id: int):
     pass
 
 
-@router.put("/{course_id}", status_code=204)
+@router.put("/{course_id}", status_code=204,
+            responses=errors.with_errors(errors.course_not_found(),
+                                         errors.access_denied()))
 async def update_course(course_id: int,
                         params: CourseUpdate,
                         user: Account = Depends(get_teacher),
@@ -121,7 +137,9 @@ async def update_course(course_id: int,
     db.commit()
 
 
-@router.put("/{course_id}/section", status_code=204)
+@router.put("/{course_id}/section", status_code=204,
+            responses=errors.with_errors(errors.course_section_not_found(),
+                                         errors.access_denied()))
 async def update_course_section(course_id: int,
                                 params: CourseSectionUpdate,
                                 user: Account = Depends(get_teacher),
@@ -154,7 +172,9 @@ async def update_course_task():
     pass
 
 
-@router.put("/{course_id}/publish", status_code=204)
+@router.put("/{course_id}/publish", status_code=204,
+            responses=errors.with_errors(errors.course_not_found(),
+                                         errors.access_denied()))
 async def update_course_publishing(course_id: int,
                                    is_published: bool = Query(),
                                    user: Account = Depends(get_teacher),
@@ -169,7 +189,9 @@ async def update_course_publishing(course_id: int,
     db.commit()
 
 
-@router.put("/{course_id}/section/access", status_code=204)
+@router.put("/{course_id}/section/access", status_code=204,
+            responses=errors.with_errors(errors.course_section_not_found(),
+                                         errors.access_denied()))
 async def update_course_section_access(course_id: int,
                                        section_id: int = Query(),
                                        is_opened: bool = Query(),
@@ -188,3 +210,57 @@ async def update_course_section_access(course_id: int,
 
     section.is_opened = is_opened
     db.commit()
+
+
+@router.delete("/{course_id}", status_code=204,
+               responses=errors.with_errors(errors.course_not_found(),
+                                            errors.access_denied()))
+async def delete_course(course_id: int,
+                        force: bool = Query(False),
+                        db: Session = Depends(get_database),
+                        user: Account = Depends(get_teacher)):
+    course = db.query(Course).filter_by(id=course_id).first()
+    if course is None:
+        raise errors.course_not_found()
+    if user.account_type == EnumAccountType.teacher and course.owner != user.id:
+        raise errors.access_denied()
+
+
+@router.delete("/{course_id}/section/{section_id}", status_code=204,
+               responses=errors.with_errors(errors.course_not_found(),
+                                            errors.access_denied(),
+                                            errors.section_not_found()))
+async def delete_section(course_id: int,
+                         section_id: int,
+                         force: bool = Query(False),
+                         db: Session = Depends(get_database),
+                         user: Account = Depends(get_teacher)):
+    pass
+
+
+@router.delete("/{course_id}/lesson/{lesson_id}", status_code=204,
+               responses=errors.with_errors(errors.course_not_found(),
+                                            errors.access_denied(),
+                                            errors.lesson_not_found()))
+async def delete_lesson(course_id: int,
+                        lesson_id: int,
+                        force: bool = Query(False),
+                        db: Session = Depends(get_database),
+                        user: Account = Depends(get_teacher)):
+    course = db.query(Course).filter_by(id=course_id).first()
+    if course is None:
+        raise errors.course_not_found()
+    if user.account_type == EnumAccountType.teacher and course.owner != user.id:
+        raise errors.access_denied()
+
+
+@router.delete("/{course_id}/task/{task_id}", status_code=204,
+               responses=errors.with_errors(errors.course_not_found(),
+                                            errors.access_denied(),
+                                            errors.task_not_found()))
+async def delete_task(course_id: int,
+                      task_id: int,
+                      force: bool = Query(False),
+                      db: Session = Depends(get_database),
+                      user: Account = Depends(get_teacher)):
+    course = db.query()
