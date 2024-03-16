@@ -38,11 +38,15 @@ class CourseMessage(Base):
     course_id: Mapped[int] = mapped_column(ForeignKey("course.id"), nullable=False)
     account_id: Mapped[int] = mapped_column(ForeignKey("account.id"), index=True, nullable=False)
     content: Mapped[Dict[Any, Any]] = mapped_column(JSONB, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,
+    title: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False,
                                                  server_default=func.current_timestamp(),
                                                  deferred=True, deferred_group="date")
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True,
+                                                 server_default=func.current_timestamp(),
                                                  deferred=True, deferred_group="date")
+    
+    course: Mapped["Course"] = relationship("Course", backref="course_messages")
 
 
 class CourseSection(Base):
@@ -108,10 +112,9 @@ class CourseStatistics(Base):
 class CourseFiles(Base):
     __tablename__ = "course_files"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    course_id: Mapped[int] = mapped_column(ForeignKey("course.id"), nullable=True, index=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("course_task.id"), nullable=True, index=True)
     message_id: Mapped[int] = mapped_column(ForeignKey("course_message.id"), nullable=True, index=True)
-    name: Mapped[str] = mapped_column(String(32), nullable=False, default="файл", index=True)
+    name: Mapped[str] = mapped_column(String(32), nullable=False, default="file", index=True)
     s3_path: Mapped[str] = mapped_column(nullable=False)
     owner: Mapped[int] = mapped_column(ForeignKey("account.id"), nullable=False, index=True)
 
