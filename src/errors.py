@@ -95,6 +95,7 @@ def task_not_found():
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                          detail="Task not found")
 
+
 def phone_is_not_unique():
     return HTTPException(status_code=status.HTTP_409_CONFLICT,
                          detail="User with such phone already exists!")
@@ -104,6 +105,12 @@ def course_message_not_found():
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                          detail="Course message not found")
 
+
 def attachment_not_found():
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                          detail="Attachment file not found")
+
+
+def resource_not_found():
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                         detail="Resource not found!")

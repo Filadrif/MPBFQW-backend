@@ -13,7 +13,7 @@ class UpdateMessage(BaseModel):
     content: Optional[dict]
 
 
-class MessageAttachement(BaseModel):
+class MessageAttachment(BaseModel):
     id: int
     file_name: str
     s3_path: str
@@ -24,7 +24,7 @@ class GetMessage(BaseModel):
     content: dict
     last_activity_at: datetime
     owner_name: str
-    attachemnts: List[MessageAttachement]
+    attachments: List[MessageAttachment]
 
 
 class GetAllCourseMessages(BaseModel):

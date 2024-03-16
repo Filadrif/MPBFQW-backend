@@ -42,6 +42,16 @@ class S3:
         with BytesIO(file) as f:
             self.s3client.upload_fileobj(f, settings.AWS_BUCKET, fileid)
 
+    def delete_file(self, fileid: str):
+        self.s3client.delete_object(Bucket=settings.AWS_BUCKET, Key=fileid)
+
+    def has_file(self, fileid: str):
+        try:
+            self.s3client.head_object(Bucket=settings.AWS_BUCKET, Key=fileid)
+            return True
+        except botocore.exceptions.ClientError:
+            return False
+
     def create_bucket(self):
         try:
             self.s3client.create_bucket(Bucket=settings.AWS_BUCKET)
