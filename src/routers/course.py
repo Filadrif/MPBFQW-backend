@@ -12,9 +12,9 @@ from auth import get_user, get_teacher, get_admin
 from models.user import Account
 from models.course import Course, CourseInfo, CourseSection, CourseLesson, CourseTask, CourseProgress, CourseStatistics, CourseFiles
 from schemas.enums import EnumAccountType
-from schemas.course import (CourseCreate, CourseUpdate, CourseCreatedData, GetAllCourses, CourseSectionCreate,
+from schemas.course import (CourseCreate, CourseUpdate, CourseCreatedData, CourseSectionCreate,
                             CourseSectionUpdate, CourseSectionCreatedData, CourseLessonCreate, CourseLessonCreatedData, 
-                            CourseTaskCreatedData, CourseStructure, CourseSectionStructure)
+                            CourseTaskCreatedData, CourseStructure, CourseSectionStructure, CourseLessonStructure)
 import S3.s3 as s3
 import errors
 
@@ -80,7 +80,7 @@ async def create_course_section(params: CourseSectionCreate,
 async def create_course_lesson(params: CourseLessonCreate,
                                user: Account = Depends(get_teacher),
                                db: Session = Depends(get_database)):
-    """Creates a new course section"""
+    """Creates a new course lesson"""
     section = db.query(CourseSection).filter_by(id=params.section_id).first()
     if section is None:
         raise errors.lesson_not_found()
@@ -99,7 +99,7 @@ async def create_course_lesson(params: CourseLessonCreate,
              responses=errors.with_errors())
 async def create_course_task(user: Account = Depends(get_teacher),
                              db: Session = Depends(get_database)):
-    """Creates a new course lesson"""
+    """Creates a new course task"""
     pass
 
 
@@ -405,19 +405,72 @@ async def delete_task_files(task_id: int,
         db.delete(task_file)
 
 
-@router.get("/{course_id}/structure", response_model=CourseStructure,
-            responses=errors.with_errors())
+@router.get("/general/{course_id}/structure", response_model=List[CourseStructure],
+            responses=errors.with_errors(errors.course_not_found(),
+                                         errors.access_denied()))
 async def get_course_structure_info(course_id: int,
                                     db: Session = Depends(get_database),
                                     user: Account = Depends(get_user)):
-    """Shows Lists of sections of lessons"""
-    pass
+    """Shows Lists of sections of lessons"""    
+    sections = db.query(CourseSection).filter_by(course_id=course_id).order_by(CourseSection.id).all()
+    if sections is None:
+        raise errors.course_not_found()
+    
+    has_user_parmission = sections.course.owner != user.id and user.account_type != EnumAccountType.admin
+    if not sections.course.is_published and has_user_parmission:
+        raise errors.access_denied()
+    
+    result = []
+    for section in sections:
+        if section.is_opened:
+            lessons = (db.query(CourseLesson).
+                       options(load_only(CourseLesson.id, 
+                                         CourseLesson.name)).
+                                         filter_by(id=section.id))
+            if not section.is_opened and has_user_parmission:
+                lessons = lessons.filter_by(is_opened=True)
+            lessons.all()
+            result.append(CourseStructure(section_id=section.id,
+                                          section_name=section.name,
+                                          duration=section.duration,
+                                          lessons=[CourseSectionStructure(lesson_id=lesson.id, 
+                                                                          name=lesson.name) for lesson in lessons]))
+    
+    return result
+            
 
 
-@router.get("/lesson/{lesson_id}/structure/",
-            responses=errors.with_errors())
-async def get_lesson_structure_info(course_id: int,
+@router.get("/lesson/{lesson_id}/structure", response_model=List[CourseLessonStructure],
+            responses=errors.with_errors(errors.lesson_not_found(),
+                                         errors.access_denied()))
+async def get_lesson_structure_info(lesson_id: int,
                                     db: Session = Depends(get_database),
                                     user: Account = Depends(get_user)):
     """Shows structure of lesson"""
-    pass
+    lesson = db.query(CourseLesson).filter_by(id=lesson_id).first()
+    if lesson is None:
+        raise errors.lesson_not_found()
+    if user.account_type != EnumAccountType.admin and not lesson.is_opened and user.id != lesson.section.course.owner:
+        raise errors.access_denied()
+    
+    tasks = (db.query(CourseTask).
+             options(load_only(CourseTask.id, 
+                               CourseTask.task_type)).
+                               order_by(CourseTask.id).
+                               filter_by(lesson_id=lesson_id).
+                               all())
+    result = []
+    for task, i in enumerate(tasks, 1):
+        result.append(CourseLessonStructure(id=task.id, 
+                                            name=str(i), 
+                                            task_type=task.task_type))
+
+    return result
+
+# TODO Update course lesson
+#      Update course task
+#      Create course task
+#      Get course 
+#      Get course section
+#      Get course lesson
+#      Get course task

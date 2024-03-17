@@ -76,7 +76,6 @@ class CourseTask(Base):
     lesson_id: Mapped[int] = mapped_column(ForeignKey("course_lesson.id"), nullable=False, index=True)
     task_type: Mapped[EnumTaskType] = mapped_column(apply_task_type, nullable=False, index=True)
     content: Mapped[Dict[Any, Any]] = mapped_column(JSONB, nullable=True)
-    s3_path: Mapped[str] = mapped_column(nullable=True)
 
     lesson: Mapped["CourseLesson"] = relationship("CourseLesson", backref="task")
 

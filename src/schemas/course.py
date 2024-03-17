@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
+from schemas.enums import EnumTaskType
 
 
 class GetAllCourses(BaseModel):
@@ -84,3 +85,9 @@ class CourseStructure(BaseModel):
     section_name: str
     duration: int
     lessons: List[CourseSectionStructure]
+
+
+class CourseLessonStructure(BaseModel):
+    id: int
+    name: str
+    task_type: EnumTaskType
