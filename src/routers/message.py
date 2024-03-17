@@ -1,9 +1,9 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from typing import List
 from sqlalchemy.orm import load_only
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, NamedTemporaryFile
 
 import os.path as p
 
@@ -19,6 +19,7 @@ from func.tools import get_user_full_name
 
 import S3.s3 as s3
 import errors
+import logging
 
 router = APIRouter()
 
@@ -122,7 +123,7 @@ async def delete_course_message(message_id: int,
     attachments = db.query(CourseFiles).filter_by(message_id=message_id).all()
     s3_session = s3.S3()
     for attachment in attachments:
-        if s3_session.has_file(attachment.s3_location):
+        if s3_session.has_file(attachment.s3_path):
             s3_session.delete_file(attachment.s3_path)
         db.delete(attachment)
 
@@ -130,18 +131,18 @@ async def delete_course_message(message_id: int,
     db.commit()
 
 
-@router.get("/message/all", response_model=List[GetAllCourseMessages])
+@router.get("/{course_id}/message/all", response_model=List[GetAllCourseMessages])
 async def get_all_course_messages(course_id: int,
-                                  limit: int,
-                                  page: int,
+                                  limit: int,  # Add check for > 0
+                                  page: int,  # Add check for > 0
                                   user: Account = Depends(get_user),
                                   db: Session = Depends(get_database)):
     """Get limit number of messages with base info"""
     messages = (db.query(CourseMessage).
                 filter_by(course_id=course_id).
-                order_by(CourseMessage.created_at.desc()).
+                order_by(CourseMessage.created_at).
+                offset((page - 1) * limit).
                 limit(limit).
-                offset(page*limit).
                 all())
     result = []
     for message in messages:
@@ -155,7 +156,7 @@ async def get_all_course_messages(course_id: int,
     return result
 
 
-@router.post("/message/{message_id}/attachment", status_code=201,
+@router.post("/message/attachment", status_code=201,
              responses=errors.with_errors(errors.course_message_not_found(),
                                           errors.access_denied()))
 async def create_message_attachment(message_id: int,
@@ -219,24 +220,23 @@ async def delete_message_attachment(message_id: int,
                                     attachment_id: int = Query(),
                                     user: Account = Depends(get_teacher),
                                     db: Session = Depends(get_database)):
-    # Check if message with attachment exists
-    message = db.query(CourseMessage).filter_by(id=message_id).first()
-    if message is None:
-        raise errors.course_message_not_found()
-
-    if user.account_type == EnumAccountType.teacher and message.account_id != user.id:
-        raise errors.access_denied()
-
+    """Delete attachment from message"""
     attachment = (db.query(CourseFiles).
                   options(load_only(CourseFiles.id, CourseFiles.message_id, CourseFiles.s3_path)).
-                  filter_by(id=attachment_id, message_id=message_id).
+                  filter_by(id=attachment_id).
                   first())
     if attachment is None:
         raise errors.attachment_not_found()
+    
+    message = db.query(CourseMessage).filter_by(id=message_id).first()
+    if message is None:
+        raise errors.course_message_not_found()
+    if user.account_type == EnumAccountType.teacher and message.account_id != user.id:
+        raise errors.access_denied()
 
     # Delete file from s3
     s3_session = s3.S3()
-    if not s3_session.has_file(attachment.s3_location):
+    if not s3_session.has_file(attachment.s3_path):
         raise errors.resource_not_found()
     s3_session.delete_file(attachment.s3_path)
 
@@ -244,7 +244,7 @@ async def delete_message_attachment(message_id: int,
     db.commit()
 
 
-@router.get("/message/attachment/download", response_class=FileResponse,
+@router.get("/message/attachment/download", 
             responses=errors.with_errors(errors.access_denied(),
                                          errors.course_message_not_found(),
                                          errors.resource_not_found()))
@@ -260,23 +260,23 @@ async def download_attachment(attachment_id: int = Query(),
     if attachment is None:
         raise errors.attachment_not_found()
     
-    """
-
+    message = db.query(CourseMessage).options(load_only(CourseMessage.course_id)).filter_by(attachment.message_id).first()
     # Check if user has rights to download attachment
     if (db.query(CourseStatistics).
             options(load_only(CourseStatistics.course_id,
                               CourseStatistics.account_id)).
-            filter_by(course_id=attachment.message.course_id, account_id=user.id).
+            filter_by(course_id=message.course_id, account_id=user.id).
             first()) and attachment.message.account_id != user.id:
         raise errors.access_denied()
 
-    """
-
     s3_session = s3.S3()
     with TemporaryDirectory(prefix="download_") as tmp:
-        file_path = p.join(tmp, attachment.s3_path)
+        file_path = p.join(tmp, f"{attachment.name}.{attachment.s3_path.split(".")[-1]}")
         with open(file_path, mode="w+b") as f:
             if not s3_session.has_file(attachment.s3_path):
                 raise errors.resource_not_found()
             s3_session.download_file(f, attachment.s3_path)
-            return FileResponse(file_path, media_type="multipart/form-data")
+            headers = {"Content-Disposition": f"attachment; filename={attachment.name}.{attachment.s3_path.split(".")[-1]}"}
+            return Response(content=f.read(),
+                            media_type="multipart/form-data",
+                            headers=headers)
