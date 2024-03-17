@@ -140,7 +140,7 @@ async def get_all_course_messages(course_id: int,
     """Get limit number of messages with base info"""
     messages = (db.query(CourseMessage).
                 filter_by(course_id=course_id).
-                order_by(CourseMessage.created_at).
+                order_by(CourseMessage.created_at.desc()).
                 offset((page - 1) * limit).
                 limit(limit).
                 all())
