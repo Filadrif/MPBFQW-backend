@@ -172,14 +172,14 @@ async def update_course_section(course_id: int,
 
 
 @router.put("/lesson", status_code=204,
-            response=errors.with_errors())
+            responses=errors.with_errors())
 async def update_course_lesson(user: Account = Depends(get_teacher),
                                db: Session = Depends(get_database)):
     pass
 
 
 @router.put("/task", status_code=204, 
-            response=errors.with_errors())
+            responses=errors.with_errors())
 async def update_course_task(user: Account = Depends(get_teacher),
                              db: Session = Depends(get_database)):
     pass
@@ -285,4 +285,12 @@ async def get_course_structure_info(course_id: int,
                                     db: Session = Depends(get_database),
                                     user: Account = Depends(get_user)):
     """Shows Lists of sections of lessons"""
+    pass
+
+
+@router.get("/lesson/{lesson_id}/structure/",
+            responses=errors.with_errors())
+async def get_lesson_structure_info(course_id: int,
+                                    db: Session = Depends(get_database),
+                                    user: Account = Depends(get_user)):
     pass

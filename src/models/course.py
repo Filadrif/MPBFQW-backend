@@ -37,7 +37,7 @@ class CourseMessage(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     course_id: Mapped[int] = mapped_column(ForeignKey("course.id"), nullable=False)
     account_id: Mapped[int] = mapped_column(ForeignKey("account.id"), index=True, nullable=False)
-    content: Mapped[Dict[Any, Any]] = mapped_column(JSONB, nullable=False)
+    content: Mapped[str] = mapped_column(String, nullable=False)
     title: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False,
                                                  server_default=func.current_timestamp(),
