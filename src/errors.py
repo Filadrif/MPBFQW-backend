@@ -114,3 +114,8 @@ def attachment_not_found():
 def resource_not_found():
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                          detail="Resource not found!")
+
+
+def action_without_force_denied():
+    return HTTPException(status_code=status.HTTP_409_CONFLICT,
+                         detail="Force option is required to execute this request")

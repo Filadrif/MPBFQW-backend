@@ -42,7 +42,7 @@ async def get_all_my_courses(limit: int,
                              page: int,
                              user: Account = Depends(get_user),
                              db: Session = Depends(get_database)):
-    courses = db.query(CourseStatistics).filter_by(account_id=user.id)
+    courses = db.query(CourseStatistics).filter_by(account_id=user.id).all()
 
 
 @router.get("/courses/recent", response_model=List[GetCourseRecent])
@@ -71,7 +71,14 @@ async def get_my_recent_courses(user: Account = Depends(get_user),
     return recent_courses
 
 
-@router.get("/courses/all", response_model=List[GetAllCourses])
-def get_all_courses(user: Account = Depends(get_user),
+@router.get("/courses/all", response_model=List[GetAllCourses],
+            responses=errors.with_errors())
+def get_all_courses(limit: int,  # Add check for > 0
+                    page: int,  # Add check for > 0
+                    user: Account = Depends(get_user),
                     db: Session = Depends(get_database)):
-    courses = db.query(Course).filter_by(is_opened=True)
+    courses = (db.query(Course).
+               filter_by(is_opened=True).
+               offset((page - 1) * limit).
+               limit(limit).
+               all())

@@ -9,12 +9,12 @@ import logging
 from db import get_database, Session
 from auth import get_user, get_teacher, get_admin
 from models.user import Account
-from models.course import Course, CourseInfo, CourseSection, CourseLesson, CourseTask
+from models.course import Course, CourseInfo, CourseSection, CourseLesson, CourseTask, CourseProgress, CourseStatistics, CourseFiles
 from schemas.enums import EnumAccountType
 from schemas.course import (CourseCreate, CourseUpdate, CourseCreatedData, GetAllCourses, CourseSectionCreate,
                             CourseSectionUpdate, CourseSectionCreatedData, CourseLessonCreate, CourseLessonCreatedData, 
                             CourseTaskCreatedData, CourseStructure, CourseSectionStructure)
-
+import S3.s3 as s3
 import errors
 
 
@@ -227,7 +227,8 @@ async def update_course_section_access(course_id: int,
 
 @router.delete("/{course_id}", status_code=204,
                responses=errors.with_errors(errors.course_not_found(),
-                                            errors.access_denied()))
+                                            errors.access_denied(),
+                                            errors.action_without_force_denied()))
 async def delete_course(course_id: int,
                         force: bool = Query(False),
                         db: Session = Depends(get_database),
@@ -237,10 +238,35 @@ async def delete_course(course_id: int,
         raise errors.course_not_found()
     if user.account_type == EnumAccountType.teacher and course.owner != user.id:
         raise errors.access_denied()
+    sections = db.query(CourseSection).filter_by(course_id=course_id).all()
+    lessons = db.query(CourseLesson).filter(CourseLesson.section_id.in_([id for id in sections.id])).all()
+    tasks = db.query(CourseTask).filter(CourseTask.lesson_id.in_([id for id in lessons.id])).all()
+    task_progress = db.query(CourseProgress).filter_by(course_id=course_id).all()
+    course_files = db.query(CourseFiles).filter(CourseFiles.task_id.in_([id for id in task.id])).all()
+    course_stats = db.query(CourseStatistics).filter_by(course_id=course_id).all()
+    if len(task_progress) and not force:
+        raise errors.action_without_force_denied()
+    s3_session = s3.S3()
+    for task_file in course_files:
+        if not s3_session.has_file(task_file.s3_path):
+            raise errors.resource_not_found()
+        s3_session.delete_file(task_file.s3_path)
+        db.delete(task_file)
+    for progress in task_progress:
+        db.delete(progress)
+    for task in tasks:
+        db.delete(task)
+    for lesson in lessons:
+        db.delete(lesson)
+    for section in sections:
+        db.delete(section)
+    for stat in course_stats:
+        db.delete(stat)
+    db.delete(course)
 
 
 @router.delete("/{course_id}/section/{section_id}", status_code=204,
-               responses=errors.with_errors(errors.course_not_found(),
+               responses=errors.with_errors(errors.action_without_force_denied(),
                                             errors.access_denied(),
                                             errors.section_not_found()))
 async def delete_section(course_id: int,
@@ -248,7 +274,39 @@ async def delete_section(course_id: int,
                          force: bool = Query(False),
                          db: Session = Depends(get_database),
                          user: Account = Depends(get_teacher)):
-    pass
+    """
+    Delete course section with all lessons and tasks.
+    Use force to delete course with statistics
+    """
+    section = db.query(CourseSection).filter_by(id=section_id, course_id=course_id).first()
+    if section is None:
+        raise errors.section_not_found()
+    if user.account_type == EnumAccountType.teacher and section.course.owner != user.id:
+        raise errors.access_denied()
+    
+    lessons = db.query(CourseLesson).filter(section_id=section_id).all()
+    tasks = db.query(CourseTask).filter(CourseTask.lesson_id.in_([id for id in lessons.id])).all()
+    task_progress = db.query(CourseProgress).filter_by(course_id=course_id).all()
+    course_files = db.query(CourseFiles).filter(CourseFiles.task_id.in_([id for id in task.id])).all()
+    
+    if len(task_progress) and not force:
+        raise errors.action_without_force_denied()
+    s3_session = s3.S3()
+    for task_file in course_files:
+        if not s3_session.has_file(task_file.s3_path):
+            raise errors.resource_not_found()
+        s3_session.delete_file(task_file.s3_path)
+        db.delete(task_file)
+    for progress in task_progress:
+        db.delete(progress)
+    for task in tasks:
+        db.delete(task)
+    for lesson in lessons:
+        db.delete(lesson)
+ 
+    db.delete(section)
+    
+    
 
 
 @router.delete("/{course_id}/lesson/{lesson_id}", status_code=204,
@@ -260,11 +318,32 @@ async def delete_lesson(course_id: int,
                         force: bool = Query(False),
                         db: Session = Depends(get_database),
                         user: Account = Depends(get_teacher)):
-    course = db.query(Course).filter_by(id=course_id).first()
-    if course is None:
-        raise errors.course_not_found()
-    if user.account_type == EnumAccountType.teacher and course.owner != user.id:
+    """
+    Delete course lesson  with all tasks.
+    Use force to delete course with statistics
+    """
+    lesson = db.query(CourseLesson).filter(id=lesson_id).first()
+    if user.account_type == EnumAccountType.teacher and lesson.section.course.owner != user.id and lesson.section.course.id != course_id:
         raise errors.access_denied()
+    
+    tasks = db.query(CourseTask).filter_by(lesson_id=lesson_id).all()
+    task_progress = db.query(CourseProgress).filter_by(course_id=course_id).all()
+    course_files = db.query(CourseFiles).filter(CourseFiles.task_id.in_([id for id in task.id])).all()
+    
+    if len(task_progress) and not force:
+        raise errors.action_without_force_denied()
+    s3_session = s3.S3()
+    for task_file in course_files:
+        if not s3_session.has_file(task_file.s3_path):
+            raise errors.resource_not_found()
+        s3_session.delete_file(task_file.s3_path)
+        db.delete(task_file)
+    for progress in task_progress:
+        db.delete(progress)
+    for task in tasks:
+        db.delete(task)
+ 
+    db.delete(lesson)
 
 
 @router.delete("/{course_id}/task/{task_id}", status_code=204,
@@ -276,7 +355,28 @@ async def delete_task(course_id: int,
                       force: bool = Query(False),
                       db: Session = Depends(get_database),
                       user: Account = Depends(get_teacher)):
-    course = db.query()
+    """
+    Delete course lesson  with all additional files.
+    Use force to delete course with statistics
+    """
+    task = db.query(CourseTask).filter_by(id=task_id).first()
+    if user.account_type == EnumAccountType.teacher and task.lesson.section.course.owner != user.id and task.lesson.section.course.id != course_id:
+        raise errors.access_denied()
+    task_progress = db.query(CourseProgress).filter_by(course_id=course_id).all()
+    course_files = db.query(CourseFiles).filter(CourseFiles.task_id.in_([id for id in task.id])).all()
+    
+    if len(task_progress) and not force:
+        raise errors.action_without_force_denied()
+    s3_session = s3.S3()
+    for task_file in course_files:
+        if not s3_session.has_file(task_file.s3_path):
+            raise errors.resource_not_found()
+        s3_session.delete_file(task_file.s3_path)
+        db.delete(task_file)
+    for progress in task_progress:
+        db.delete(progress)
+ 
+    db.delete(task)
 
 
 @router.get("/{course_id}/structure", response_model=CourseStructure,
