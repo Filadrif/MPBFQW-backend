@@ -2,19 +2,20 @@ import sqlalchemy.exc
 from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import load_only
-from sqlalchemy.sql import func
 from typing import List
 import traceback
 import logging
 
 from db import get_database, Session
-from auth import get_user, get_teacher, get_admin
+from auth import get_user, get_teacher
 from models.user import Account
-from models.course import Course, CourseInfo, CourseSection, CourseLesson, CourseTask, CourseProgress, CourseStatistics, CourseFiles
-from schemas.enums import EnumAccountType
-from schemas.course import (CourseCreate, CourseUpdate, CourseCreatedData, CourseSectionCreate,
-                            CourseSectionUpdate, CourseSectionCreatedData, CourseLessonCreate, CourseLessonCreatedData, 
-                            CourseTaskCreatedData, CourseStructure, CourseSectionStructure, CourseLessonStructure)
+from models.course import (Course, CourseInfo, CourseSection, CourseLesson, CourseTask, CourseProgress, CourseStatistics,
+                           CourseFiles)
+from schemas.enums import EnumAccountType, EnumTaskType
+from schemas.course import (CourseCreate, CourseUpdate, CourseCreatedData, CourseSectionCreate, CourseLessonUpdate,
+                            CourseSectionUpdate, CourseSectionCreatedData, CourseLessonCreate, CourseLessonCreatedData,
+                            CourseTaskCreatedData, CourseStructure, CourseSectionStructure, CourseLessonStructure, GetCourse,
+                            GetSection, GetLesson, GetTask)
 import S3.s3 as s3
 import errors
 
@@ -103,22 +104,26 @@ async def create_course_task(user: Account = Depends(get_teacher),
     pass
 
 
-@router.get("/{course_id}")
+@router.get("/{course_id}", response_model=GetCourse,
+            responses=errors.with_errors())
 async def get_course(course_id: int):
     pass
 
 
-@router.get("/{course_id}/section/{section_id}")
+@router.get("/{course_id}/section/{section_id}", response_model=GetSection,
+            responses=errors.with_errors())
 async def get_course_section(course_id: int, section_id: int):
     pass
 
 
-@router.get("/{course_id}/lesson/{lesson_id}")
+@router.get("/{course_id}/lesson/{lesson_id}", response_model=GetLesson,
+            responses=errors.with_errors())
 async def get_course_lesson(course_id: int, lesson_id: int):
     pass
 
 
-@router.get("/{course_id}/task/task/{task_id}")
+@router.get("/{course_id}/task/task/{task_id}", response_model=GetTask,
+            responses=errors.with_errors())
 async def get_course_task(course_id: int, task_id: int):
     pass
 
@@ -143,6 +148,8 @@ async def update_course(course_id: int,
         course.description = params.description
     if params.course_tags is not None:
         course.course_tags = params.course_tags
+
+    course.course_info.updated_at = datetime.now()
 
     db.commit()
 
@@ -169,21 +176,46 @@ async def update_course_section(course_id: int,
         section.name = params.name
     if params.duration is not None:
         section.duration = params.duration
+    # TODO update CourseInfo.updated_at
     db.commit()
 
 
 @router.put("/lesson", status_code=204,
-            responses=errors.with_errors())
-async def update_course_lesson(user: Account = Depends(get_teacher),
+            responses=errors.with_errors(errors.lesson_not_found(),
+                                         errors.access_denied()))
+async def update_course_lesson(params: CourseLessonUpdate,
+                               user: Account = Depends(get_teacher),
                                db: Session = Depends(get_database)):
-    pass
+    """Updating course lesson data"""
+    lesson = db.query(CourseLesson).filter_by(id=params.lesson_id).first()
+    if lesson is None:
+        raise errors.lesson_not_found()
+    if user.account_type == EnumAccountType.teacher and  lesson.section.course.owner  != user.id:
+        raise errors.access_denied()
+    
+    if params.name is not None:
+        lesson.name = params.name
+    # TODO update CourseInfo.updated_at
+    db.commit()
 
 
 @router.put("/task", status_code=204, 
-            responses=errors.with_errors())
-async def update_course_task(user: Account = Depends(get_teacher),
+            responses=errors.with_errors(errors.task_not_found(),
+                                         errors.access_denied()))
+async def update_course_task(params,
+                             user: Account = Depends(get_teacher),
                              db: Session = Depends(get_database)):
-    pass
+    """Updating course task data"""
+    task = db.query(CourseTask).filter_by().first()
+    if task is None:
+        raise errors.task_not_found()
+    if user.account_type == EnumAccountType.teacher and  task.lesson.section.course.owner  != user.id:
+        raise errors.access_denied()
+    
+    if task.task_type == EnumTaskType.quiz or task.task_type == EnumTaskType.typing:
+        task.content = params.content
+    # TODO update CourseInfo.updated_at
+    db.commit()
 
 
 @router.put("/{course_id}/publish", status_code=204,
@@ -199,31 +231,52 @@ async def update_course_publishing(course_id: int,
         raise errors.course_not_found()
     if user.account_type == EnumAccountType.teacher and course.owner != user.id:
         raise errors.access_denied()
+    
     course.is_published = is_published
     db.commit()
 
 
-@router.put("/{course_id}/section/access", status_code=204,
+@router.put("/{section_id}/section/access", status_code=204,
             responses=errors.with_errors(errors.course_section_not_found(),
                                          errors.access_denied()))
-async def update_course_section_access(course_id: int,
-                                       section_id: int = Query(),
+async def update_course_section_access(section_id: int,
                                        is_opened: bool = Query(),
                                        user: Account = Depends(get_teacher),
                                        db: Session = Depends(get_database)):
     """Makes course section opened or closed"""
     section = (db.query(CourseSection).
-               filter(CourseSection.id == course_id,
-                      CourseSection.id == section_id).
+               filter(CourseSection.id == section_id).
                first())
     if section is None:
         raise errors.course_section_not_found()
-    course = db.query(Course).options(load_only(Course.owmer)).filter_by(id=course_id).first()
-    if user.account_type == EnumAccountType.teacher and course.owner != user.id:
+    
+    if user.account_type == EnumAccountType.teacher and section.course.owner != user.id:
         raise errors.access_denied()
 
     section.is_opened = is_opened
     db.commit()
+
+
+@router.put("/{lesson_id}/lesson/access", status_code=204,
+            responses=errors.with_errors(errors.lesson_not_found(),
+                                         errors.access_denied()))
+async def update_course_lesson_access(lesson_id: int,
+                                      is_opened: bool = Query(),
+                                      user: Account = Depends(get_teacher),
+                                      db: Session = Depends(get_database)):
+    """Makes course section opened or closed"""
+    lesson = (db.query(CourseLesson).
+               filter(CourseLesson.id == lesson_id).
+               first())
+    if lesson is None:
+        raise errors.lesson_not_found()
+
+    if user.account_type == EnumAccountType.teacher and lesson.section.course.owner != user.id:
+        raise errors.access_denied()
+
+    lesson.is_opened = is_opened
+    db.commit()
+
 
 
 @router.delete("/", status_code=204,
@@ -244,7 +297,7 @@ async def delete_course(course_id: int,
     lessons = db.query(CourseLesson).filter(CourseLesson.section_id.in_([id for id in sections.id])).all()
     tasks = db.query(CourseTask).filter(CourseTask.lesson_id.in_([id for id in lessons.id])).all()
     task_progress = db.query(CourseProgress).filter_by(course_id=course_id).all()
-    course_files = db.query(CourseFiles).filter(CourseFiles.task_id.in_([id for id in task.id])).all()
+    course_files = db.query(CourseFiles).filter(CourseFiles.task_id.in_([id for id in tasks.id])).all()
     course_stats = db.query(CourseStatistics).filter_by(course_id=course_id).all()
     if len(task_progress) and not force:
         raise errors.action_without_force_denied()
@@ -289,7 +342,7 @@ async def delete_section(section_id: int,
     lessons = db.query(CourseLesson).filter(section_id=section_id).all()
     tasks = db.query(CourseTask).filter(CourseTask.lesson_id.in_([id for id in lessons.id])).all()
     task_progress = db.query(CourseProgress).filter_by(course_id=section.course.id).all()
-    course_files = db.query(CourseFiles).filter(CourseFiles.task_id.in_([id for id in task.id])).all()
+    course_files = db.query(CourseFiles).filter(CourseFiles.task_id.in_([id for id in tasks.id])).all()
     
     if len(task_progress) and not force:
         raise errors.action_without_force_denied()
@@ -305,10 +358,8 @@ async def delete_section(section_id: int,
         db.delete(task)
     for lesson in lessons:
         db.delete(lesson)
- 
+
     db.delete(section)
-    
-    
 
 
 @router.delete("/lesson/{lesson_id}", status_code=204,
@@ -332,7 +383,7 @@ async def delete_lesson(lesson_id: int,
     
     tasks = db.query(CourseTask).filter_by(lesson_id=lesson_id).all()
     task_progress = db.query(CourseProgress).filter_by(course_id=lesson.section.course.owner).all()
-    course_files = db.query(CourseFiles).filter(CourseFiles.task_id.in_([id for id in task.id])).all()
+    course_files = db.query(CourseFiles).filter(CourseFiles.task_id.in_([id for id in tasks.id])).all()
     
     if len(task_progress) and not force:
         raise errors.action_without_force_denied()
@@ -395,7 +446,7 @@ async def delete_task_files(task_id: int,
     task_files = db.query(CourseFiles).filter(CourseFiles.task_id == task_id,
                                               CourseFiles.id.in_(file_ids))
     if user.account_type == EnumAccountType.teacher:
-        task_files.filter(CourseFiles.owner==user.id)
+        task_files.filter(CourseFiles.owner == user.id)
     task_files = task_files.all()
     s3_session = s3.S3()
     for task_file in task_files:
@@ -416,24 +467,26 @@ async def get_course_structure_info(course_id: int,
     if sections is None:
         raise errors.course_not_found()
     
-    has_user_parmission = sections.course.owner != user.id and user.account_type != EnumAccountType.admin
-    if not sections.course.is_published and has_user_parmission:
+    if not len(sections):
+        return []
+     
+    has_user_parmission = sections[0].course.owner != user.id and user.account_type != EnumAccountType.admin
+    if not sections[0].course.is_published and has_user_parmission:
         raise errors.access_denied()
     
     result = []
     for section in sections:
         if section.is_opened:
             lessons = (db.query(CourseLesson).
-                       options(load_only(CourseLesson.id, 
-                                         CourseLesson.name)).
-                                         filter_by(id=section.id))
+                       options(load_only(CourseLesson.id,
+                                         CourseLesson.name)).filter_by(section_id=section.id))
             if not section.is_opened and has_user_parmission:
                 lessons = lessons.filter_by(is_opened=True)
             lessons.all()
             result.append(CourseStructure(section_id=section.id,
                                           section_name=section.name,
                                           duration=section.duration,
-                                          lessons=[CourseSectionStructure(lesson_id=lesson.id, 
+                                          lessons=[CourseSectionStructure(lesson_id=lesson.id,
                                                                           name=lesson.name) for lesson in lessons]))
     
     return result
@@ -460,16 +513,14 @@ async def get_lesson_structure_info(lesson_id: int,
                                filter_by(lesson_id=lesson_id).
                                all())
     result = []
-    for task, i in enumerate(tasks, 1):
+    for i, task in enumerate(tasks, 1):
         result.append(CourseLessonStructure(id=task.id, 
                                             name=str(i), 
                                             task_type=task.task_type))
 
     return result
 
-# TODO Update course lesson
-#      Update course task
-#      Create course task
+# TODO Create course task
 #      Get course 
 #      Get course section
 #      Get course lesson

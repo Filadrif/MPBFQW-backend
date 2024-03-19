@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import List, Any, Dict
 
-from passlib.context import CryptContext
 from sqlalchemy import ARRAY, Integer, TIMESTAMP, func, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -116,4 +115,3 @@ class CourseFiles(Base):
     name: Mapped[str] = mapped_column(String(32), nullable=False, default="file", index=True)
     s3_path: Mapped[str] = mapped_column(nullable=False)
     owner: Mapped[int] = mapped_column(ForeignKey("account.id"), nullable=False, index=True)
-

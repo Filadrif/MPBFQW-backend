@@ -10,6 +10,7 @@ class GetAllCourses(BaseModel):
     owner_name: str
     total_duration: int = Field(description="Show total duration of all sections")
     sections: int = Field(description="Show number of sections in course")
+    students_on_course: int
 
 
 class GetCourseRecent(BaseModel):
@@ -23,6 +24,18 @@ class GetCourse(BaseModel):
     description: str
     course_tags: List[str]
     owner_name: str
+
+
+class GetSection(BaseModel):
+    id: int
+
+
+class GetLesson(BaseModel):
+    id: int
+
+
+class GetTask(BaseModel):
+    id: int
 
 
 class CourseCreate(BaseModel):
@@ -71,7 +84,7 @@ class CourseLessonCreate(BaseModel):
 
 
 class CourseLessonUpdate(BaseModel):
-    section_id: int
+    lesson_id: int
     name: Optional[str]
 
 

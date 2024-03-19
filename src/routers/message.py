@@ -3,14 +3,14 @@ from fastapi import APIRouter, Depends, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 from typing import List
 from sqlalchemy.orm import load_only
-from tempfile import TemporaryDirectory, NamedTemporaryFile
+from tempfile import TemporaryDirectory
 
 import os.path as p
 
 
 from db import get_database, Session
 from auth import get_user, get_teacher
-from models.user import Account, AccountInfo
+from models.user import Account
 from models.course import Course, CourseMessage, CourseFiles, CourseStatistics
 from schemas.enums import EnumAccountType
 from schemas.message import (CreateMessage, GetMessage, UpdateMessage, GetAllCourseMessages, MessageAttachment,
@@ -19,7 +19,6 @@ from func.tools import get_user_full_name
 
 import S3.s3 as s3
 import errors
-import logging
 
 router = APIRouter()
 
